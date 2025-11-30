@@ -1,4 +1,3 @@
-// index.js
 const express = require('express');
 const cors = require('cors');
 const connection = require('./db');
@@ -7,7 +6,7 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = 3000;
-const JWT_SECRET = "holaplebes"; // Cambia esto por un secreto fuerte en producción
+const JWT_SECRET = "holaplebes"; 
 
 // Middleware
 app.use(cors());
@@ -60,45 +59,51 @@ function autenticar(req, res, next) {
   });
 }
 
-
 app.post('/reservaciones', autenticar, (req, res) => {
-  const { nombre, personas, mensaje, telefono, fecha } = req.body;
+  const { nombre, personas, mensaje, telefono, fecha, hora } = req.body;
 
-  if (!nombre || !personas || !fecha)
+  // Validación
+  if (!nombre || !personas || !fecha || !hora)
     return res.status(400).json({ mensaje: "Faltan campos obligatorios" });
 
   // Insertar contacto
   const sqlContacto = `INSERT INTO contactos (telefono) VALUES (?)`;
   connection.query(sqlContacto, [telefono || null], (err, resultContacto) => {
     if (err) return res.status(500).json({ mensaje: "Error al insertar contacto", error: err });
+
     const contacto_id = resultContacto.insertId;
 
-    // Insertar fecha
     const sqlFecha = `INSERT INTO fechas_reservacion (fecha) VALUES (?)`;
     connection.query(sqlFecha, [fecha], (err, resultFecha) => {
       if (err) return res.status(500).json({ mensaje: "Error al insertar fecha", error: err });
+
       const fecha_id = resultFecha.insertId;
-
-      // Insertar reservación con usuario_id
       const sqlReservacion = `
-        INSERT INTO reservaciones (usuario_id, nombre, personas, mensaje, contacto_id, fecha_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO reservaciones (usuario_id, nombre, personas, mensaje, contacto_id, fecha_id, hora)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
-      connection.query(sqlReservacion, [req.usuarioId, nombre, personas, mensaje || null, contacto_id, fecha_id], (err, resultReservacion) => {
-        if (err) return res.status(500).json({ mensaje: "Error al insertar reservación", error: err });
 
-        res.status(201).json({
-          mensaje: "Reservación guardada",
-          reservacion: {
-            id: resultReservacion.insertId,
-            nombre,
-            personas,
-            mensaje: mensaje || null,
-            contacto: { telefono: telefono || null },
-            fecha
-          }
-        });
-      });
+      connection.query(
+        sqlReservacion,
+        [req.usuarioId, nombre, personas, mensaje || null, contacto_id, fecha_id, hora],
+        (err, resultReservacion) => {
+
+          if (err) return res.status(500).json({ mensaje: "Error al insertar reservación", error: err });
+
+          res.status(201).json({
+            mensaje: "Reservación guardada",
+            reservacion: {
+              id: resultReservacion.insertId,
+              nombre,
+              personas,
+              mensaje: mensaje || null,
+              contacto: { telefono: telefono || null },
+              fecha,
+              hora
+            }
+          });
+        }
+      );
     });
   });
 });
@@ -107,7 +112,7 @@ app.post('/reservaciones', autenticar, (req, res) => {
 app.get('/reservaciones', (req, res) => {
   const sql = `
     SELECT r.id, r.nombre, r.personas, r.mensaje,
-           c.telefono, f.fecha, u.nombre AS usuario
+           c.telefono, f.fecha,r.hora, u.nombre AS usuario
     FROM reservaciones r
     LEFT JOIN contactos c ON r.contacto_id = c.id
     LEFT JOIN fechas_reservacion f ON r.fecha_id = f.id
@@ -118,14 +123,15 @@ app.get('/reservaciones', (req, res) => {
   connection.query(sql, (err, results) => {
     if (err) return res.status(500).json({ mensaje: "Error al obtener reservaciones", error: err });
     const data = results.map(r => ({
-      id: r.id,
-      nombre: r.nombre,
-      personas: r.personas,
-      mensaje: r.mensaje,
-      contacto: { telefono: r.telefono },
-      fecha: r.fecha,
-      usuario: r.usuario
-    }));
+     id: r.id,
+     nombre: r.nombre,
+     personas: r.personas,
+     mensaje: r.mensaje,
+     contacto: { telefono: r.telefono },
+     fecha: r.fecha,
+     hora: r.hora,   
+     usuario: r.usuario
+   }));
     res.status(200).json(data);
   });
 });
